@@ -10,9 +10,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * https://github.com/gumshoe2020/sslog4j
@@ -29,94 +30,48 @@ public class Logger {
 	private String fileName = "gumshoeLog";
 	private PrintWriter out;
 	private boolean packages = false;
-	private boolean first = true;
+	private boolean once = false;
 
 	/**
 	 * This constructor uses basic string representations
 	 * of system file paths and file name to interpret where
 	 *  the log is to be placed and named.
-	 * @param filePath Examples: "C:\\temp\\" or "/var/log/temp/"; 
-	 * defaults to the Java project directory
-	 * @param fileName The name of the log file; it will automatically
-	 * have a .log extension appended.  Defaults to the caller's class name.
-	 * @param LogLevel The minimum log level of messages to be logged.
+	 * @param filePath Examples: "C:\\temp\\" or "/var/log/temp/"
+	 * @param fileName  The name of the log file; it will automatically
+	 * have a .log extension appended.
 	 */
 	public Logger(Path filePath, String loggerFileName, LogLevel ll){
 		fileName = loggerFileName;
 		path = filePath;
 		FILE_NAME_PATH = filePath + File.separator + fileName + ".log";
 		llev = ll;
-		logLines = new CopyOnWriteArrayList<String>();
+		logLines = Collections.synchronizedList(new ArrayList<String>());
+		this.printHeader();
 	}
-	/**
-	 * This constructor uses basic string representations
-	 * of system file paths and file name to interpret where
-	 *  the log is to be placed and named.
-	 * @param filePath Examples: "C:\\temp\\" or "/var/log/temp/"; 
-	 * defaults to the Java project directory
-	 * @param fileName The name of the log file; it will automatically
-	 * have a .log extension appended.  Defaults to the caller's class name.
-	 * @param LogLevel The minimum log level of messages to be logged.
-	 */
+	
 	public Logger(Path filePath, String loggerFileName){
 		this(filePath, loggerFileName, LogLevel.DEBUG);
 	}
-	/**
-	 * This constructor uses basic string representations
-	 * of system file paths and file name to interpret where
-	 *  the log is to be placed and named.
-	 * @param filePath Examples: "C:\\temp\\" or "/var/log/temp/"; 
-	 * defaults to the Java project directory
-	 * @param fileName The name of the log file; it will automatically
-	 * have a .log extension appended.  Defaults to the caller's class name.
-	 * @param LogLevel The minimum log level of messages to be logged.
-	 */
+	
 	public Logger(Path logRootPath, LogLevel ll){
 		this(logRootPath, "tempLog",ll);
 		String s = String.valueOf(Thread.currentThread().getStackTrace()[2]);
 		fileName = s.substring((s.indexOf("(")+1), s.indexOf(":"));
 		this.setLogFileName(fileName);
 	}
-	/**
-	 * This constructor uses basic string representations
-	 * of system file paths and file name to interpret where
-	 *  the log is to be placed and named.
-	 * @param filePath Examples: "C:\\temp\\" or "/var/log/temp/"; 
-	 * defaults to the Java project directory
-	 * @param fileName The name of the log file; it will automatically
-	 * have a .log extension appended.  Defaults to the caller's class name.
-	 * @param LogLevel The minimum log level of messages to be logged.
-	 */
+	
 	public Logger(String loggerFileName){
 		this(Paths.get(System.getProperty("user.dir") + File.separator + "tempLogs"), loggerFileName, LogLevel.DEBUG);
 		
 	}
-	/**
-	 * This constructor uses basic string representations
-	 * of system file paths and file name to interpret where
-	 *  the log is to be placed and named.
-	 * @param filePath Examples: "C:\\temp\\" or "/var/log/temp/"; 
-	 * defaults to the Java project directory
-	 * @param fileName The name of the log file; it will automatically
-	 * have a .log extension appended.  Defaults to the caller's class name.
-	 * @param LogLevel The minimum log level of messages to be logged.
-	 */
+	
 	public Logger(LogLevel ll){
 		this(Paths.get(System.getProperty("user.dir") + File.separator + "tempLogs"), 
 				String.valueOf(Thread.currentThread().getStackTrace()[2]).substring((
 						String.valueOf(Thread.currentThread().getStackTrace()[2]).indexOf("(")+1), 
 						String.valueOf(Thread.currentThread().getStackTrace()[2]).indexOf(":")), ll);
 	}
-	/**
-	 * This constructor uses basic string representations
-	 * of system file paths and file name to interpret where
-	 *  the log is to be placed and named.
-	 * @param filePath Examples: "C:\\temp\\" or "/var/log/temp/"; 
-	 * defaults to the Java project directory
-	 * @param fileName The name of the log file; it will automatically
-	 * have a .log extension appended.  Defaults to the caller's class name.
-	 * @param LogLevel The minimum log level of messages to be logged.
-	 */
+	
 	public Logger(){
 		this(Paths.get(System.getProperty("user.dir") + File.separator + "tempLogs"), 
 				String.valueOf(Thread.currentThread().getStackTrace()[2]).substring((
@@ -130,26 +85,30 @@ public class Logger {
 		return this;
 	}
 	
-	public void setLogFilePath(Path logRootDirPath){
+	public Logger setLogPath(Path logRootDirPath){
 		this.path = logRootDirPath;
-		this.first = true;
+		once = true;
+		return this;
 	}
 	
 	public String getLogFilePath(){
 		return this.FILE_NAME_PATH;
 	}
 	
-	public void setLogFileName(String logFileName){
+	public Logger setLogFileName(String logFileName){
 		this.fileName = logFileName;
 		FILE_NAME_PATH = path + File.separator + fileName + ".log";
-		this.first = true;
+		once = true;
+		return this;
 	}
 	
 	private void printHeader(){
-		writeLog("/******************************************************************************");
-		writeLog("*      " + fileName + " log");
-		writeLog("*******************************************************************************/");
-		
+		if(once){
+			writeLog("/******************************************************************************");
+			writeLog("*      " + fileName + " log");
+			writeLog("*******************************************************************************/");
+			once = false;
+		}
 	}
 
 	private void readLog() {
@@ -162,10 +121,6 @@ public class Logger {
 	}
 
 	private void writeLog(String message) {
-		if(first){
-			this.printHeader();
-			this.first = false;
-		}
 		if(Files.exists(path)) {
 			BufferedWriter bufWriter = null;
 			try{
